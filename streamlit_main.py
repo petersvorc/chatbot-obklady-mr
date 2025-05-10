@@ -7,37 +7,41 @@ import uuid
 import os
 import json
 
-# Google Sheets autentifikácia (zo secrets)
+# Google Sheets autentifikácia (cez secrets)
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 
+# Názvy hárkov
 SHEET_NAME = "ChatBot_Obklady_MR"
 DOPYT_SHEET = "dopyt"
 DIZAJN_SHEET = "dopyt_dizajn"
 SHOWROOM_SHEET = "dopyt_showroom"
 
-# Pomocné funkcie
+# Funkcia pre zápis dopytu na dlažbu
 def zapis_dopyt(email, dekor, znacka, kolekcia, seria, rozmery, hrubka, povrch, mnozstvo):
     sheet = client.open(SHEET_NAME).worksheet(DOPYT_SHEET)
     datum = datetime.today().strftime("%Y-%m-%d")
     id_zaujemcu = "zaujemca_" + uuid.uuid4().hex[:6]
     sheet.append_row([datum, id_zaujemcu, email, "", dekor, znacka, kolekcia, seria, rozmery, hrubka, povrch, mnozstvo])
 
-def zapis_dizajn(email, typ, rozmery, poznamka, pudorys, styl):
+# Funkcia pre zápis dizajnového dopytu
+def zapis_dizajn(email, typ, plocha, pudorys, styl, poznamka):
     sheet = client.open(SHEET_NAME).worksheet(DIZAJN_SHEET)
     datum = datetime.today().strftime("%Y-%m-%d")
     id_zaujemcu = "dizajn_" + uuid.uuid4().hex[:6]
-    sheet.append_row([datum, id_zaujemcu, email, typ, rozmery, poznamka, pudorys, styl, "nový"])
+    meno = ""  # prázdne meno
+    sheet.append_row([datum, id_zaujemcu, meno, email, typ, plocha, pudorys, styl, poznamka])
 
+# Funkcia pre zápis rezervácie showroomu
 def zapis_showroom(email, mesto, poznamka):
     sheet = client.open(SHEET_NAME).worksheet(SHOWROOM_SHEET)
     datum = datetime.today().strftime("%Y-%m-%d")
     id_zaujemcu = "showroom_" + uuid.uuid4().hex[:6]
     sheet.append_row([datum, id_zaujemcu, email, mesto, "", poznamka, "nový"])
 
-# Streamlit UI
+# Hlavné UI aplikácie
 st.title("🧱 Obklady MR – Asistent")
 
 st.write("Dobrý deň! S čím vám môžeme pomôcť?")
@@ -62,12 +66,12 @@ elif vyber == "Potrebujem návrh / dizajn":
     st.subheader("Záujem o návrh interiéru alebo vizualizáciu")
     email = st.text_input("E-mail:")
     typ = st.text_input("Typ priestoru (napr. kúpeľňa, kuchyňa):")
-    rozmery = st.text_input("Rozmery (m):")
-    styl = st.text_input("Preferovaný štýl / dekor:")
-    pudorys = st.text_input("Máte pôdorys? (áno/nie):")
+    plocha = st.text_input("Rozmery (plocha v m²):")
+    pudorys = st.selectbox("Máte pôdorys?", ["áno", "nie"])
+    styl = st.text_input("Preferovaný dekor / štýl:")
     poznamka = st.text_area("Doplňujúce informácie:")
     if st.button("Odoslať dizajnový dopyt"):
-        zapis_dizajn(email, typ, rozmery, poznamka, pudorys, styl)
+        zapis_dizajn(email, typ, plocha, pudorys, styl, poznamka)
         st.success("Ďakujeme! Náš tím sa vám čoskoro ozve.")
 
 elif vyber == "Chcem navštíviť showroom":
