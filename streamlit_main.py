@@ -33,6 +33,8 @@ df_sluzby = nacitaj_data(SLUZBY_SHEET)
 # Funkcia na výpočet ceny dlažby
 def vypocitaj_cenu_dlazby(param, mnozstvo):
     filtr = df_cennik[df_cennik["rozmer + hrúbka + povrch"] == param]
+    if filtr.empty:
+        return None, None
     if mnozstvo <= 20:
         cena_za_m2 = filtr.iloc[0]["21-59 m2"]
         doprava = filtr.iloc[0]["transportná paleta"] + filtr.iloc[0]["doprava"]
@@ -59,54 +61,93 @@ def vypocitaj_cenu_sluzieb(sluzby):
 def main():
     st.title("🧱 Konfigurátor obkladov a služieb")
 
-    # Výber dekoru
-    dekor = st.selectbox("Vyberte dekor:", sorted(df_formaty["dekor"].unique()))
-    df_kolekcie = df_formaty[df_formaty["dekor"] == dekor]
+    polozky = []
 
-    # Výber kolekcie
-    kolekcia = st.selectbox("Vyberte kolekciu:", sorted(df_kolekcie["kolekcia"].unique()))
-    df_serie = df_kolekcie[df_kolekcie["kolekcia"] == kolekcia]
+    st.header("👉 Vyberajte dlažby:")
 
-    # Výber série
-    seria = st.selectbox("Vyberte sériu:", sorted(df_serie["séria"].unique()))
-    df_rozmery = df_serie[df_serie["séria"] == seria]
+    while True:
+        dekor = st.selectbox("Vyberte dekor:", sorted(df_formaty["dekor"].unique()), key=f"dekor_{len(polozky)}")
+        df_kolekcie = df_formaty[df_formaty["dekor"] == dekor]
 
-    # Výber rozmeru + hrúbka + povrch
-    param = st.selectbox("Vyberte formát + povrch:", sorted(df_rozmery["rozmer + hrúbka + povrch"].unique()))
+        kolekcia = st.selectbox("Vyberte kolekciu:", sorted(df_kolekcie["kolekcia"].unique()), key=f"kolekcia_{len(polozky)}")
+        df_serie = df_kolekcie[df_kolekcie["kolekcia"] == kolekcia]
 
-    # Zadanie množstva
-    mnozstvo = st.number_input("Zadajte množstvo v m²:", min_value=1, step=1)
+        seria = st.selectbox("Vyberte sériu:", sorted(df_serie["séria"].unique()), key=f"seria_{len(polozky)}")
+        df_rozmery = df_serie[df_serie["séria"] == seria]
+
+        param = st.selectbox("Vyberte formát + povrch:", sorted(df_rozmery["rozmer + hrúbka + povrch"].unique()), key=f"param_{len(polozky)}")
+
+        mnozstvo = st.number_input("Zadajte množstvo v m²:", min_value=1, step=1, key=f"mnozstvo_{len(polozky)}")
+
+        if st.button("Pridať dlažbu", key=f"pridat_{len(polozky)}"):
+            cena_dlazby, mnozstvo_zaznam = vypocitaj_cenu_dlazby(param, mnozstvo)
+            if cena_dlazby is None:
+                st.error("Pre vybraný formát + povrch nemáme zatiaľ cenu. Prosím kontaktujte nás e-mailom.")
+            else:
+                polozky.append({
+                    "dekor": dekor,
+                    "kolekcia": kolekcia,
+                    "séria": seria,
+                    "formát": param,
+                    "množstvo": mnozstvo,
+                    "cena": cena_dlazby
+                })
+                st.success("Dlažba bola pridaná do zoznamu.")
+
+        if polozky:
+            st.subheader("📝 Aktuálny výber:")
+            for idx, p in enumerate(polozky):
+                st.write(f"{idx+1}. {p['dekor']} / {p['kolekcia']} / {p['séria']} / {p['formát']} - {p['množstvo']} m² - {p['cena']} €")
+            vymazat = st.selectbox("Chcete odstrániť nejakú dlažbu?", options=["Nie"] + [f"{i+1}" for i in range(len(polozky))], key="vymazat")
+            if vymazat != "Nie":
+                polozky.pop(int(vymazat)-1)
+                st.experimental_rerun()
+
+        pokracovat = st.radio("Chcete vyberať ďalej?", ("Áno", "Nie"), key="pokracovat")
+        if pokracovat == "Nie":
+            break
+
+    if not polozky:
+        st.error("Nevybrali ste žiadne dlažby.")
+        return
+
+    # Súhrn a výpočet ceny
+    st.header("📋 Súhrn objednávky:")
+
+    celkove_mnozstvo = sum(p["množstvo"] for p in polozky)
+    celkova_cena_dlazieb = sum(p["cena"] for p in polozky)
+
+    st.write(f"**Celková plocha:** {celkove_mnozstvo} m²")
+    st.write(f"**Cena dlažieb spolu:** {celkova_cena_dlazieb} €")
+
+    if celkove_mnozstvo > 121:
+        st.info("💬 Upozornenie: Bude vám ponúknutá individuálna zľava.")
 
     # Výber služieb
     vybrane_sluzby = st.multiselect("Vyberte doplnkové služby:", sorted(df_sluzby["sluzba"].unique()))
+
+    cena_sluzieb = vypocitaj_cenu_sluzieb(vybrane_sluzby)
+    st.write(f"**Cena služieb spolu:** {cena_sluzieb} €")
 
     # Zadanie e-mailu a miesta dodania
     email = st.text_input("Zadajte váš e-mail:")
     miesto = st.text_input("Zadajte miesto dodania:")
 
-    if st.button("Odoslať dopyt"):
-        cena_dlazby, mnozstvo_zaznam = vypocitaj_cenu_dlazby(param, mnozstvo)
-        cena_sluzieb = vypocitaj_cenu_sluzieb(vybrane_sluzby)
-        celkova_cena = cena_dlazby + cena_sluzieb
-
-        # Súhrn položiek
-        suhrn = f"Dekor: {dekor}, Kolekcia: {kolekcia}, Séria: {seria}, Rozmer: {param}, Množstvo: {mnozstvo} m²"
-        if vybrane_sluzby:
-            suhrn += ", Služby: " + ", ".join(vybrane_sluzby)
-
-        # Poznámka pri individuálnej zľave
-        if mnozstvo > 121:
-            suhrn += " (Cena bude individuálne upravená)"
-
-        # Zápis do Google Sheets
+    if st.button("Odoslať dopyt finálne"):
         sheet = client.open(SHEET_NAME).worksheet(DOPYT_SHEET)
         datum = datetime.datetime.now().strftime("%Y-%m-%d")
         id_zaujemcu = f"zaujemca_{int(datetime.datetime.now().timestamp())}"
 
-        novy_zaznam = [datum, id_zaujemcu, email, miesto, dekor, df_rozmery.iloc[0]["značka"], kolekcia, seria, param, mnozstvo, celkova_cena, suhrn]
+        suhrn_poloziek = "; ".join([f"{p['dekor']} {p['kolekcia']} {p['séria']} {p['formát']} ({p['množstvo']} m²)" for p in polozky])
+
+        novy_zaznam = [
+            datum, id_zaujemcu, email, miesto,
+            polozky[0]["dekor"], polozky[0]["kolekcia"], polozky[0]["séria"], polozky[0]["formát"],
+            celkove_mnozstvo, celkova_cena_dlazieb + cena_sluzieb, suhrn_poloziek
+        ]
         sheet.append_row(novy_zaznam)
 
-        st.success("Dopyt bol úspešne odoslaný! Ďakujeme.")
+        st.success("Dopyt bol úspešne odoslaný! Ďakujeme za záujem.")
 
 if __name__ == "__main__":
     main()
