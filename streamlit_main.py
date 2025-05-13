@@ -5,6 +5,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import os
 import json
 import datetime
+from uuid import uuid4
 
 # Google Sheets autentifikácia
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -66,20 +67,20 @@ def main():
     st.header("👉 Vyberajte dlažby:")
 
     while True:
-        dekor = st.selectbox("Vyberte dekor:", sorted(df_formaty["dekor"].unique()), key=f"dekor_{len(polozky)}")
+        dekor = st.selectbox("Vyberte dekor:", sorted(df_formaty["dekor"].unique()), key=f"dekor_{uuid4()}")
         df_kolekcie = df_formaty[df_formaty["dekor"] == dekor]
 
-        kolekcia = st.selectbox("Vyberte kolekciu:", sorted(df_kolekcie["kolekcia"].unique()), key=f"kolekcia_{len(polozky)}")
+        kolekcia = st.selectbox("Vyberte kolekciu:", sorted(df_kolekcie["kolekcia"].unique()), key=f"kolekcia_{uuid4()}")
         df_serie = df_kolekcie[df_kolekcie["kolekcia"] == kolekcia]
 
-        seria = st.selectbox("Vyberte sériu:", sorted(df_serie["séria"].unique()), key=f"seria_{len(polozky)}")
+        seria = st.selectbox("Vyberte sériu:", sorted(df_serie["séria"].unique()), key=f"seria_{uuid4()}")
         df_rozmery = df_serie[df_serie["séria"] == seria]
 
-        param = st.selectbox("Vyberte formát + povrch:", sorted(df_rozmery["rozmer + hrúbka + povrch"].unique()), key=f"param_{len(polozky)}")
+        param = st.selectbox("Vyberte formát + povrch:", sorted(df_rozmery["rozmer + hrúbka + povrch"].unique()), key=f"param_{uuid4()}")
 
-        mnozstvo = st.number_input("Zadajte množstvo v m²:", min_value=1, step=1, key=f"mnozstvo_{len(polozky)}")
+        mnozstvo = st.number_input("Zadajte množstvo v m²:", min_value=1, step=1, key=f"mnozstvo_{uuid4()}")
 
-        if st.button("Pridať dlažbu", key=f"pridat_{len(polozky)}"):
+        if st.button("Pridať dlažbu", key=f"pridat_{uuid4()}"):
             cena_dlazby, mnozstvo_zaznam = vypocitaj_cenu_dlazby(param, mnozstvo)
             if cena_dlazby is None:
                 st.error("Pre vybraný formát + povrch nemáme zatiaľ cenu. Prosím kontaktujte nás e-mailom.")
@@ -93,17 +94,18 @@ def main():
                     "cena": cena_dlazby
                 })
                 st.success("Dlažba bola pridaná do zoznamu.")
+                st.experimental_rerun()
 
         if polozky:
             st.subheader("📝 Aktuálny výber:")
             for idx, p in enumerate(polozky):
                 st.write(f"{idx+1}. {p['dekor']} / {p['kolekcia']} / {p['séria']} / {p['formát']} - {p['množstvo']} m² - {p['cena']} €")
-            vymazat = st.selectbox("Chcete odstrániť nejakú dlažbu?", options=["Nie"] + [f"{i+1}" for i in range(len(polozky))], key="vymazat")
+            vymazat = st.selectbox("Chcete odstrániť nejakú dlažbu?", options=["Nie"] + [f"{i+1}" for i in range(len(polozky))], key=f"vymazat_{uuid4()}")
             if vymazat != "Nie":
                 polozky.pop(int(vymazat)-1)
                 st.experimental_rerun()
 
-        pokracovat = st.radio("Chcete vyberať ďalej?", ("Áno", "Nie"), key="pokracovat")
+        pokracovat = st.radio("Chcete vyberať ďalej?", ("Áno", "Nie"), key=f"pokracovat_{uuid4()}")
         if pokracovat == "Nie":
             break
 
@@ -124,16 +126,16 @@ def main():
         st.info("💬 Upozornenie: Bude vám ponúknutá individuálna zľava.")
 
     # Výber služieb
-    vybrane_sluzby = st.multiselect("Vyberte doplnkové služby:", sorted(df_sluzby["sluzba"].unique()))
+    vybrane_sluzby = st.multiselect("Vyberte doplnkové služby:", sorted(df_sluzby["sluzba"].unique()), key=f"sluzby_{uuid4()}")
 
     cena_sluzieb = vypocitaj_cenu_sluzieb(vybrane_sluzby)
     st.write(f"**Cena služieb spolu:** {cena_sluzieb} €")
 
     # Zadanie e-mailu a miesta dodania
-    email = st.text_input("Zadajte váš e-mail:")
-    miesto = st.text_input("Zadajte miesto dodania:")
+    email = st.text_input("Zadajte váš e-mail:", key=f"email_{uuid4()}")
+    miesto = st.text_input("Zadajte miesto dodania:", key=f"miesto_{uuid4()}")
 
-    if st.button("Odoslať dopyt finálne"):
+    if st.button("Odoslať dopyt finálne", key=f"odoslat_{uuid4()}"):
         sheet = client.open(SHEET_NAME).worksheet(DOPYT_SHEET)
         datum = datetime.datetime.now().strftime("%Y-%m-%d")
         id_zaujemcu = f"zaujemca_{int(datetime.datetime.now().timestamp())}"
