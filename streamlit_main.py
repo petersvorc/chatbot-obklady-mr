@@ -59,6 +59,11 @@ def vypocitaj_cenu_dlazby(param, mnozstvo):
 
 # Hlavná aplikácia
 def main():
+    if "rerun_po_pridani" in st.session_state and st.session_state["rerun_po_pridani"]:
+    st.session_state["polozky"].append(st.session_state["nova_polozka"])
+    st.success("Dlažba bola pridaná.")
+    st.session_state["rerun_po_pridani"] = False
+    
     st.title("🧱 Výber obkladov a dlažieb")
 
     if st.session_state["stav_vyberu"] == "vyber":
@@ -76,21 +81,23 @@ def main():
         param = st.selectbox("Formát + povrch:", sorted(df_param["rozmer + hrúbka + povrch"].unique()))
         mnozstvo = st.number_input("Množstvo (m²):", min_value=1, step=1)
 
-        if st.button("✅ Pridať túto dlažbu"):
-            cena = vypocitaj_cenu_dlazby(param, mnozstvo)
-            if cena is None:
-                st.error("Pre tento výber nemáme cenu v cenníku.")
-            else:
-                st.session_state["polozky"].append({
-                    "dekor": dekor,
-                    "kolekcia": kolekcia,
-                    "séria": seria,
-                    "formát": param,
-                    "množstvo": mnozstvo,
-                    "cena": cena
-                })
-                st.success("Dlažba bola pridaná.")
-                st.experimental_rerun()
+if st.button("✅ Pridať túto dlažbu"):
+    cena = vypocitaj_cenu_dlazby(param, mnozstvo)
+    if cena is None:
+        st.error("Pre tento výber nemáme cenu v cenníku.")
+    else:
+        nova_polozka = {
+            "dekor": dekor,
+            "kolekcia": kolekcia,
+            "séria": seria,
+            "formát": param,
+            "mnozstvo": mnozstvo,
+            "cena": cena
+        }
+        # Zapíšeme a nastavíme flag
+        st.session_state["nova_polozka"] = nova_polozka
+        st.session_state["rerun_po_pridani"] = True
+        st.experimental_rerun()
 
         if st.session_state["polozky"]:
             if st.button("👉 Ukončiť výber a prejsť na súhrn"):
