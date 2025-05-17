@@ -37,7 +37,9 @@ if "polozky" not in st.session_state:
 if "stav_vyberu" not in st.session_state:
     st.session_state["stav_vyberu"] = "vyber"
 
-# Výpočet ceny dlažby
+if "rerun_po_pridani" not in st.session_state:
+    st.session_state["rerun_po_pridani"] = False
+
 def vypocitaj_cenu_dlazby(param, mnozstvo):
     filtr = df_cennik[df_cennik["rozmer + hrúbka + povrch"] == param]
     if filtr.empty:
@@ -57,14 +59,14 @@ def vypocitaj_cenu_dlazby(param, mnozstvo):
         celkova_cena = round(cena_za_m2 * mnozstvo)
     return celkova_cena
 
-# Hlavná aplikácia
 def main():
-    if "rerun_po_pridani" in st.session_state and st.session_state["rerun_po_pridani"]:
-    st.session_state["polozky"].append(st.session_state["nova_polozka"])
-    st.success("Dlažba bola pridaná.")
-    st.session_state["rerun_po_pridani"] = False
-    
     st.title("🧱 Výber obkladov a dlažieb")
+
+    # BEZPEČNÝ RERUN PO PRIDANÍ
+    if st.session_state.get("rerun_po_pridani"):
+        st.session_state["polozky"].append(st.session_state["nova_polozka"])
+        st.success("Dlažba bola pridaná.")
+        st.session_state["rerun_po_pridani"] = False
 
     if st.session_state["stav_vyberu"] == "vyber":
         st.header("➕ Pridajte dlažbu do výberu")
@@ -81,23 +83,21 @@ def main():
         param = st.selectbox("Formát + povrch:", sorted(df_param["rozmer + hrúbka + povrch"].unique()))
         mnozstvo = st.number_input("Množstvo (m²):", min_value=1, step=1)
 
-if st.button("✅ Pridať túto dlažbu"):
-    cena = vypocitaj_cenu_dlazby(param, mnozstvo)
-    if cena is None:
-        st.error("Pre tento výber nemáme cenu v cenníku.")
-    else:
-        nova_polozka = {
-            "dekor": dekor,
-            "kolekcia": kolekcia,
-            "séria": seria,
-            "formát": param,
-            "mnozstvo": mnozstvo,
-            "cena": cena
-        }
-        # Zapíšeme a nastavíme flag
-        st.session_state["nova_polozka"] = nova_polozka
-        st.session_state["rerun_po_pridani"] = True
-        st.experimental_rerun()
+        if st.button("✅ Pridať túto dlažbu"):
+            cena = vypocitaj_cenu_dlazby(param, mnozstvo)
+            if cena is None:
+                st.error("Pre tento výber nemáme cenu v cenníku.")
+            else:
+                st.session_state["nova_polozka"] = {
+                    "dekor": dekor,
+                    "kolekcia": kolekcia,
+                    "séria": seria,
+                    "formát": param,
+                    "mnoznost": mnozstvo,
+                    "cena": cena
+                }
+                st.session_state["rerun_po_pridani"] = True
+                st.experimental_rerun()
 
         if st.session_state["polozky"]:
             if st.button("👉 Ukončiť výber a prejsť na súhrn"):
@@ -108,11 +108,11 @@ if st.button("✅ Pridať túto dlažbu"):
         st.header("🧾 Súhrn výberu")
 
         polozky = st.session_state["polozky"]
-        celkove_m2 = sum(p["mnozstvo"] for p in polozky)
+        celkove_m2 = sum(p["mnoznost"] for p in polozky)
         celkova_cena = sum(p["cena"] for p in polozky)
 
         for idx, p in enumerate(polozky, start=1):
-            st.write(f"{idx}. {p['dekor']} / {p['kolekcia']} / {p['séria']} / {p['formát']} - {p['mnozstvo']} m² - {p['cena']} €")
+            st.write(f"{idx}. {p['dekor']} / {p['kolekcia']} / {p['séria']} / {p['formát']} - {p['mnoznost']} m² - {p['cena']} €")
 
         st.write(f"**Celková výmera:** {celkove_m2} m²")
         st.write(f"**Cena spolu za dlažby:** {celkova_cena} €")
@@ -133,7 +133,7 @@ if st.button("✅ Pridať túto dlažbu"):
             datum = datetime.datetime.now().strftime("%Y-%m-%d")
             id_zaujemcu = f"zaujemca_{int(datetime.datetime.now().timestamp())}"
 
-            suhrn = "; ".join([f"{p['dekor']} {p['kolekcia']} {p['séria']} {p['formát']} ({p['mnozstvo']} m²)" for p in polozky])
+            suhrn = "; ".join([f"{p['dekor']} {p['kolekcia']} {p['séria']} {p['formát']} ({p['mnoznost']} m²)" for p in polozky])
             zapis = [
                 datum, id_zaujemcu, email, miesto,
                 polozky[0]["dekor"], polozky[0]["kolekcia"], polozky[0]["séria"], polozky[0]["formát"],
