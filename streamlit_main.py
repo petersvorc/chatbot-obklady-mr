@@ -5,7 +5,6 @@ from oauth2client.service_account import ServiceAccountCredentials
 import os
 import json
 import datetime
-from uuid import uuid4
 
 # Google Sheets autentifikácia
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -31,11 +30,18 @@ df_formaty = nacitaj_data(FORMATY_SHEET)
 df_cennik = nacitaj_data(CENNIK_SHEET)
 df_sluzby = nacitaj_data(SLUZBY_SHEET)
 
-# Funkcia na výpočet ceny dlažby
+# Inicializácia session state
+if "polozky" not in st.session_state:
+    st.session_state["polozky"] = []
+
+if "stav_vyberu" not in st.session_state:
+    st.session_state["stav_vyberu"] = "vyber"
+
+# Výpočet ceny dlažby
 def vypocitaj_cenu_dlazby(param, mnozstvo):
     filtr = df_cennik[df_cennik["rozmer + hrúbka + povrch"] == param]
     if filtr.empty:
-        return None, None
+        return None
     if mnozstvo <= 20:
         cena_za_m2 = filtr.iloc[0]["21-59 m2"]
         doprava = filtr.iloc[0]["transportná paleta"] + filtr.iloc[0]["doprava"]
@@ -46,110 +52,91 @@ def vypocitaj_cenu_dlazby(param, mnozstvo):
     elif 60 <= mnozstvo <= 120:
         cena_za_m2 = filtr.iloc[0]["60-120 m2"]
         celkova_cena = round(cena_za_m2 * mnozstvo)
-    else:  # nad 121 m2
+    else:
         cena_za_m2 = filtr.iloc[0]["60-120 m2"]
         celkova_cena = round(cena_za_m2 * mnozstvo)
-    return celkova_cena, mnozstvo
-
-# Funkcia na výpočet ceny služieb
-def vypocitaj_cenu_sluzieb(sluzby):
-    cena = 0
-    for sluzba in sluzby:
-        cena += df_sluzby[df_sluzby["sluzba"] == sluzba]["cena"].values[0]
-    return round(cena)
+    return celkova_cena
 
 # Hlavná aplikácia
 def main():
-    st.title("🧱 Konfigurátor obkladov a služieb")
+    st.title("🧱 Výber obkladov a dlažieb")
 
-    polozky = []
+    if st.session_state["stav_vyberu"] == "vyber":
+        st.header("➕ Pridajte dlažbu do výberu")
 
-    st.header("👉 Vyberajte dlažby:")
+        dekor = st.selectbox("Dekor:", sorted(df_formaty["dekor"].unique()))
+        df_kolekcia = df_formaty[df_formaty["dekor"] == dekor]
 
-    while True:
-        dekor = st.selectbox("Vyberte dekor:", sorted(df_formaty["dekor"].unique()), key=f"dekor_{uuid4()}")
-        df_kolekcie = df_formaty[df_formaty["dekor"] == dekor]
+        kolekcia = st.selectbox("Kolekcia:", sorted(df_kolekcia["kolekcia"].unique()))
+        df_seria = df_kolekcia[df_kolekcia["kolekcia"] == kolekcia]
 
-        kolekcia = st.selectbox("Vyberte kolekciu:", sorted(df_kolekcie["kolekcia"].unique()), key=f"kolekcia_{uuid4()}")
-        df_serie = df_kolekcie[df_kolekcie["kolekcia"] == kolekcia]
+        seria = st.selectbox("Séria:", sorted(df_seria["séria"].unique()))
+        df_param = df_seria[df_seria["séria"] == seria]
 
-        seria = st.selectbox("Vyberte sériu:", sorted(df_serie["séria"].unique()), key=f"seria_{uuid4()}")
-        df_rozmery = df_serie[df_serie["séria"] == seria]
+        param = st.selectbox("Formát + povrch:", sorted(df_param["rozmer + hrúbka + povrch"].unique()))
+        mnozstvo = st.number_input("Množstvo (m²):", min_value=1, step=1)
 
-        param = st.selectbox("Vyberte formát + povrch:", sorted(df_rozmery["rozmer + hrúbka + povrch"].unique()), key=f"param_{uuid4()}")
-
-        mnozstvo = st.number_input("Zadajte množstvo v m²:", min_value=1, step=1, key=f"mnozstvo_{uuid4()}")
-
-        if st.button("Pridať dlažbu", key=f"pridat_{uuid4()}"):
-            cena_dlazby, mnozstvo_zaznam = vypocitaj_cenu_dlazby(param, mnozstvo)
-            if cena_dlazby is None:
-                st.error("Pre vybraný formát + povrch nemáme zatiaľ cenu. Prosím kontaktujte nás e-mailom.")
+        if st.button("✅ Pridať túto dlažbu"):
+            cena = vypocitaj_cenu_dlazby(param, mnozstvo)
+            if cena is None:
+                st.error("Pre tento výber nemáme cenu v cenníku.")
             else:
-                polozky.append({
+                st.session_state["polozky"].append({
                     "dekor": dekor,
                     "kolekcia": kolekcia,
                     "séria": seria,
                     "formát": param,
                     "množstvo": mnozstvo,
-                    "cena": cena_dlazby
+                    "cena": cena
                 })
-                st.success("Dlažba bola pridaná do zoznamu.")
+                st.success("Dlažba bola pridaná.")
                 st.experimental_rerun()
 
-        if polozky:
-            st.subheader("📝 Aktuálny výber:")
-            for idx, p in enumerate(polozky):
-                st.write(f"{idx+1}. {p['dekor']} / {p['kolekcia']} / {p['séria']} / {p['formát']} - {p['množstvo']} m² - {p['cena']} €")
-            vymazat = st.selectbox("Chcete odstrániť nejakú dlažbu?", options=["Nie"] + [f"{i+1}" for i in range(len(polozky))], key=f"vymazat_{uuid4()}")
-            if vymazat != "Nie":
-                polozky.pop(int(vymazat)-1)
+        if st.session_state["polozky"]:
+            if st.button("👉 Ukončiť výber a prejsť na súhrn"):
+                st.session_state["stav_vyberu"] = "suhlas"
                 st.experimental_rerun()
 
-        pokracovat = st.radio("Chcete vyberať ďalej?", ("Áno", "Nie"), key=f"pokracovat_{uuid4()}")
-        if pokracovat == "Nie":
-            break
+    elif st.session_state["stav_vyberu"] == "suhlas":
+        st.header("🧾 Súhrn výberu")
 
-    if not polozky:
-        st.error("Nevybrali ste žiadne dlažby.")
-        return
+        polozky = st.session_state["polozky"]
+        celkove_m2 = sum(p["mnozstvo"] for p in polozky)
+        celkova_cena = sum(p["cena"] for p in polozky)
 
-    # Súhrn a výpočet ceny
-    st.header("📋 Súhrn objednávky:")
+        for idx, p in enumerate(polozky, start=1):
+            st.write(f"{idx}. {p['dekor']} / {p['kolekcia']} / {p['séria']} / {p['formát']} - {p['mnozstvo']} m² - {p['cena']} €")
 
-    celkove_mnozstvo = sum(p["množstvo"] for p in polozky)
-    celkova_cena_dlazieb = sum(p["cena"] for p in polozky)
+        st.write(f"**Celková výmera:** {celkove_m2} m²")
+        st.write(f"**Cena spolu za dlažby:** {celkova_cena} €")
 
-    st.write(f"**Celková plocha:** {celkove_mnozstvo} m²")
-    st.write(f"**Cena dlažieb spolu:** {celkova_cena_dlazieb} €")
+        if celkove_m2 > 121:
+            st.info("💬 Bude vám ponúknutá individuálna zľava.")
 
-    if celkove_mnozstvo > 121:
-        st.info("💬 Upozornenie: Bude vám ponúknutá individuálna zľava.")
+        vybrane_sluzby = st.multiselect("Doplnkové služby:", df_sluzby["sluzba"].unique())
+        cena_sluzieb = sum(df_sluzby[df_sluzby["sluzba"] == s]["cena"].values[0] for s in vybrane_sluzby)
 
-    # Výber služieb
-    vybrane_sluzby = st.multiselect("Vyberte doplnkové služby:", sorted(df_sluzby["sluzba"].unique()), key=f"sluzby_{uuid4()}")
+        st.write(f"**Cena služieb spolu:** {cena_sluzieb} €")
 
-    cena_sluzieb = vypocitaj_cenu_sluzieb(vybrane_sluzby)
-    st.write(f"**Cena služieb spolu:** {cena_sluzieb} €")
+        email = st.text_input("E-mail:")
+        miesto = st.text_input("Miesto dodania:")
 
-    # Zadanie e-mailu a miesta dodania
-    email = st.text_input("Zadajte váš e-mail:", key=f"email_{uuid4()}")
-    miesto = st.text_input("Zadajte miesto dodania:", key=f"miesto_{uuid4()}")
+        if st.button("📨 Odoslať dopyt"):
+            sheet = client.open(SHEET_NAME).worksheet(DOPYT_SHEET)
+            datum = datetime.datetime.now().strftime("%Y-%m-%d")
+            id_zaujemcu = f"zaujemca_{int(datetime.datetime.now().timestamp())}"
 
-    if st.button("Odoslať dopyt finálne", key=f"odoslat_{uuid4()}"):
-        sheet = client.open(SHEET_NAME).worksheet(DOPYT_SHEET)
-        datum = datetime.datetime.now().strftime("%Y-%m-%d")
-        id_zaujemcu = f"zaujemca_{int(datetime.datetime.now().timestamp())}"
-
-        suhrn_poloziek = "; ".join([f"{p['dekor']} {p['kolekcia']} {p['séria']} {p['formát']} ({p['množstvo']} m²)" for p in polozky])
-
-        novy_zaznam = [
-            datum, id_zaujemcu, email, miesto,
-            polozky[0]["dekor"], polozky[0]["kolekcia"], polozky[0]["séria"], polozky[0]["formát"],
-            celkove_mnozstvo, celkova_cena_dlazieb + cena_sluzieb, suhrn_poloziek
-        ]
-        sheet.append_row(novy_zaznam)
-
-        st.success("Dopyt bol úspešne odoslaný! Ďakujeme za záujem.")
+            suhrn = "; ".join([f"{p['dekor']} {p['kolekcia']} {p['séria']} {p['formát']} ({p['mnozstvo']} m²)" for p in polozky])
+            zapis = [
+                datum, id_zaujemcu, email, miesto,
+                polozky[0]["dekor"], polozky[0]["kolekcia"], polozky[0]["séria"], polozky[0]["formát"],
+                celkove_m2, celkova_cena + cena_sluzieb, suhrn
+            ]
+            sheet.append_row(zapis)
+            st.success("Dopyt bol odoslaný. Ďakujeme!")
+            st.session_state["polozky"] = []
+            st.session_state["stav_vyberu"] = "vyber"
+            st.experimental_rerun()
 
 if __name__ == "__main__":
     main()
