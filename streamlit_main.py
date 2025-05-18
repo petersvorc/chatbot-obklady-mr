@@ -1,4 +1,10 @@
 import streamlit as st
+import pandas as pd
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import json
+import os
+
 st.header("Vyberte si dlažbu")
 dekor = st.selectbox("Vyberte dekor:", sorted(df_formaty["dekor"].unique()))
 
