@@ -29,11 +29,15 @@ if "sluzby" not in st.session_state:
 def vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo):
     riadok = df_cennik[df_cennik["rozmer + hrúbka + povrch"] == param]
     if riadok.empty:
-        return None, None
+        return None, None, None, None
+    doprava = 0
+    doprava_text = None
     if celkove_mnozstvo <= 20:
         cena_m2 = riadok.iloc[0]["21-59 m2"]
         doprava_riadok = df_doprava[df_doprava["polozka"].str.lower() == "doprava do 20 m²"]
-        doprava = float(doprava_riadok["cena"].values[0]) if not doprava_riadok.empty else 0
+        if not doprava_riadok.empty:
+            doprava = float(doprava_riadok["cena"].values[0])
+            doprava_text = f"Pre objednávky do 20 m² účtujeme dopravu: {doprava} €"
         cena = round(cena_m2 * mnozstvo + doprava)
         poznamka = None
     elif 21 <= celkove_mnozstvo <= 59:
@@ -48,7 +52,7 @@ def vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo):
         cena_m2 = riadok.iloc[0]["60-120 m2"]
         cena = round(cena_m2 * mnozstvo)
         poznamka = "Pri množstve dlažby nad 121 m2 je pravdepodobne priestor pre zľavu. Odošlite formulár alebo nás priamo kontaktujte."
-    return cena_m2, cena, poznamka
+    return cena_m2, cena, poznamka, doprava_text
 
 # ------------------- Formulár -------------------
 st.header("Overte si parametre našich dlažieb a orientačné ceny.")
@@ -59,7 +63,7 @@ mnozstvo = st.number_input("Množstvo (m²):", min_value=1, step=1)
 
 if st.button("Pridať tento typ dlažby"):
     celkove_mnozstvo = sum(p["mnozstvo"] for p in st.session_state["vybrane_dlazby"]) + mnozstvo
-    cena_m2, cena, poznamka = vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo)
+    cena_m2, cena, poznamka, doprava_text = vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo)
     if cena is None:
         st.error("Nenašla sa cena pre vybraný formát.")
     else:
@@ -68,17 +72,23 @@ if st.button("Pridať tento typ dlažby"):
             "mnozstvo": mnozstvo,
             "cena_m2": cena_m2,
             "cena": cena,
-            "poznamka": poznamka
+            "poznamka": poznamka,
+            "doprava_text": doprava_text
         })
         st.success("Dlažba bola pridaná.")
 
 # ------------------- Súhrn -------------------
 if st.session_state["vybrane_dlazby"]:
     st.subheader("Súhrn vášho výberu:")
+    total = 0
     for i, p in enumerate(st.session_state["vybrane_dlazby"]):
         st.write(f"{i+1}. | {p['param']} | {p['cena_m2']} €/m² | {p['mnozstvo']} m² | {p['cena']} €")
+        if p['doprava_text']:
+            st.write(f"0. | {p['doprava_text']}")
         if p['poznamka']:
             st.info(p['poznamka'])
+        total += p["cena"]
+    st.write(f"**Orientačná cena spolu:** {total} €")
 
     if st.button("Vybrať ďalšiu dlažbu"):
         st.experimental_rerun()
@@ -111,7 +121,6 @@ if st.session_state["vybrane_dlazby"]:
                     polozka["cena"],
                     f"{polozka['param']} | {polozka['cena_m2']} €/m² | {polozka['mnozstvo']} m²"
                 ])
-            # zapis doplnkových služieb ako ďalší riadok
             if st.session_state["sluzby"]:
                 worksheet_dopyt.append_row([
                     timestamp, "", email, miesto, "", "", "", "", "Doplnkové služby",
