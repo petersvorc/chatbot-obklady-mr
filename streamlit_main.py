@@ -111,12 +111,12 @@ def main():
                     "cena": cena
                 }
                 st.session_state["rerun_po_pridani"] = True
-                st.experimental_rerun()
+                st.rerun()
 
         if st.session_state["polozky"]:
             if st.button("👉 Ukončiť výber a prejsť na súhrn"):
                 st.session_state["stav_vyberu"] = "suhlas"
-                st.experimental_rerun()
+                st.rerun()
 
     elif st.session_state["stav_vyberu"] == "suhlas":
         st.header("🧾 Súhrn výberu")
@@ -157,7 +157,7 @@ def main():
             st.success("Dopyt bol odoslaný. Ďakujeme!")
             st.session_state["polozky"] = []
             st.session_state["stav_vyberu"] = "vyber"
-            st.experimental_rerun()
+            st.rerun()
 
 if __name__ == "__main__":
     main()
