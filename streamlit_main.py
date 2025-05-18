@@ -22,8 +22,6 @@ worksheet_dopyt = sheet.worksheet("dopyt")
 # ------------------- Inicializácia session state -------------------
 if "vybrane_dlazby" not in st.session_state:
     st.session_state["vybrane_dlazby"] = []
-if "sluzby" not in st.session_state:
-    st.session_state["sluzby"] = []
 
 # ------------------- Výpočet ceny -------------------
 def vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo):
@@ -37,7 +35,7 @@ def vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo):
         doprava_riadok = df_doprava[df_doprava["polozka"].str.lower() == "doprava do 20 m²"]
         if not doprava_riadok.empty:
             doprava = float(doprava_riadok["cena"].values[0])
-            doprava_text = f"Pre objednávky do 20 m² účtujeme dopravu: {doprava} €"
+            doprava_text = f"* Pre objednávky do 20 m² účtujeme dopravu: {doprava} €"
         cena = round(cena_m2 * mnozstvo + doprava)
         poznamka = None
     elif 21 <= celkove_mnozstvo <= 59:
@@ -60,6 +58,7 @@ st.write("Na cenu majú vplyv rozmery, povrch a množstvo dlažby.")
 
 param = st.selectbox("Vyberte rozmery, hrúbku a povrch:", sorted(df_cennik["rozmer + hrúbka + povrch"].unique()))
 mnozstvo = st.number_input("Množstvo (m²):", min_value=1, step=1)
+vybrane_sluzby = st.multiselect("Vyberte doplnkové služby:", df_sluzby["sluzba"].unique())
 
 if st.button("Pridať tento typ dlažby"):
     celkove_mnozstvo = sum(p["mnozstvo"] for p in st.session_state["vybrane_dlazby"]) + mnozstvo
@@ -73,7 +72,8 @@ if st.button("Pridať tento typ dlažby"):
             "cena_m2": cena_m2,
             "cena": cena,
             "poznamka": poznamka,
-            "doprava_text": doprava_text
+            "doprava_text": doprava_text,
+            "sluzby": vybrane_sluzby
         })
         st.success("Dlažba bola pridaná.")
 
@@ -82,20 +82,18 @@ if st.session_state["vybrane_dlazby"]:
     st.subheader("Súhrn vášho výberu:")
     total = 0
     for i, p in enumerate(st.session_state["vybrane_dlazby"]):
-        st.write(f"{i+1}. | {p['param']} | {p['cena_m2']} €/m² | {p['mnozstvo']} m² | {p['cena']} €")
+        st.write(f"{i+1}. {p['param']} | {p['cena_m2']} €/m² | {p['mnozstvo']} m² | {p['cena']} €")
         if p['doprava_text']:
-            st.write(f"0. | {p['doprava_text']}")
+            st.write(p['doprava_text'])
         if p['poznamka']:
             st.info(p['poznamka'])
+        if p['sluzby']:
+            st.write(f"Doplnkové služby: {', '.join(p['sluzby'])}")
         total += p["cena"]
     st.write(f"**Orientačná cena spolu:** {total} €")
 
     if st.button("Vybrať ďalšiu dlažbu"):
         st.experimental_rerun()
-
-    st.subheader("Doplnkové služby")
-    vybrane_sluzby = st.multiselect("Vyberte služby:", df_sluzby["sluzba"].unique())
-    st.session_state["sluzby"] = vybrane_sluzby
 
     st.subheader("Zadajte kontaktné údaje")
     email = st.text_input("Emailová adresa:")
@@ -119,15 +117,7 @@ if st.session_state["vybrane_dlazby"]:
                     polozka["param"],
                     polozka["mnozstvo"],
                     polozka["cena"],
-                    f"{polozka['param']} | {polozka['cena_m2']} €/m² | {polozka['mnozstvo']} m²"
-                ])
-            if st.session_state["sluzby"]:
-                worksheet_dopyt.append_row([
-                    timestamp, "", email, miesto, "", "", "", "", "Doplnkové služby",
-                    "",
-                    "",
-                    ", ".join(st.session_state["sluzby"])
+                    f"{polozka['param']} | {polozka['cena_m2']} €/m² | {polozka['mnozstvo']} m² | Služby: {', '.join(polozka['sluzby']) if polozka['sluzby'] else 'Žiadne'}"
                 ])
             st.success("Dopyt bol odoslaný.")
             st.session_state["vybrane_dlazby"] = []
-            st.session_state["sluzby"] = []
