@@ -5,6 +5,20 @@ from oauth2client.service_account import ServiceAccountCredentials
 import json
 import os
 
+# Nastavenie Google Sheets prístupu
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+client = gspread.authorize(creds)
+
+# Načítanie sheetov
+sheet = client.open("ChatBot_Obklady_MR")
+df_formaty = pd.DataFrame(sheet.worksheet("formaty").get_all_records())
+df_cennik = pd.DataFrame(sheet.worksheet("cennik").get_all_records())
+df_dopyt = pd.DataFrame(sheet.worksheet("dopyt").get_all_records())
+df_doprava = pd.DataFrame(sheet.worksheet("doprava").get_all_records())
+df_sluzby = pd.DataFrame(sheet.worksheet("sluzby").get_all_records())
+
 st.header("Vyberte si dlažbu")
 dekor = st.selectbox("Vyberte dekor:", sorted(df_formaty["dekor"].unique()))
 
