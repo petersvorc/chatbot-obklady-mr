@@ -48,7 +48,7 @@ def vypocitaj_cenu_dlazby(param, mnozstvo):
     if mnozstvo <= 20:
         cena_za_m2 = filtr.iloc[0]["21-59 m2"]
         doprava_riadok = df_cennik[df_cennik["rozmer + hrúbka + povrch"] == "doprava"]
-        doprava = doprava_riadok["21-59 m2"].values[0] if not doprava_riadok.empty else 0
+        doprava = float(doprava_riadok["21-59 m2"].values[0]) if not doprava_riadok.empty else 0
         celkova_cena = round(cena_za_m2 * mnozstvo + doprava)
     elif 21 <= mnozstvo <= 59:
         cena_za_m2 = filtr.iloc[0]["21-59 m2"]
