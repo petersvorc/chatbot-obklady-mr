@@ -1,3 +1,4 @@
+import streamlit as st
 st.header("Vyberte si dlažbu")
 dekor = st.selectbox("Vyberte dekor:", sorted(df_formaty["dekor"].unique()))
 
