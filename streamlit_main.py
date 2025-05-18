@@ -18,6 +18,7 @@ FORMATY_SHEET = "formaty"
 CENNIK_SHEET = "cennik"
 SLUZBY_SHEET = "sluzby"
 DOPYT_SHEET = "dopyt"
+DOPRAVA_SHEET = "doprava"
 
 # Načítanie dát
 @st.cache_data
@@ -29,6 +30,7 @@ def nacitaj_data(sheet_name):
 df_formaty = nacitaj_data(FORMATY_SHEET)
 df_cennik = nacitaj_data(CENNIK_SHEET)
 df_sluzby = nacitaj_data(SLUZBY_SHEET)
+df_doprava = nacitaj_data(DOPRAVA_SHEET)
 
 # Inicializácia session state
 if "polozky" not in st.session_state:
@@ -40,6 +42,15 @@ if "stav_vyberu" not in st.session_state:
 if "rerun_po_pridani" not in st.session_state:
     st.session_state["rerun_po_pridani"] = False
 
+# Funkcia na výpočet ceny dopravy z externého hárku
+def ziskaj_dopravu():
+    riadok = df_doprava[df_doprava["položka"].str.lower() == "doprava do 20 m²"]
+    try:
+        return float(riadok["cena"].values[0])
+    except:
+        return 0
+
+# Výpočet ceny dlažby
 def vypocitaj_cenu_dlazby(param, mnozstvo):
     filtr = df_cennik[df_cennik["rozmer + hrúbka + povrch"] == param]
     if filtr.empty:
@@ -47,8 +58,7 @@ def vypocitaj_cenu_dlazby(param, mnozstvo):
 
     if mnozstvo <= 20:
         cena_za_m2 = filtr.iloc[0]["21-59 m2"]
-        doprava_riadok = df_cennik[df_cennik["rozmer + hrúbka + povrch"] == "doprava"]
-        doprava = float(doprava_riadok["21-59 m2"].values[0]) if not doprava_riadok.empty else 0
+        doprava = ziskaj_dopravu()
         celkova_cena = round(cena_za_m2 * mnozstvo + doprava)
     elif 21 <= mnozstvo <= 59:
         cena_za_m2 = filtr.iloc[0]["21-59 m2"]
@@ -62,10 +72,11 @@ def vypocitaj_cenu_dlazby(param, mnozstvo):
 
     return celkova_cena
 
+# Hlavná aplikácia
 def main():
     st.title("🧱 Výber obkladov a dlažieb")
 
-    # BEZPEČNÝ RERUN PO PRIDANÍ
+    # Rerun logika
     if st.session_state.get("rerun_po_pridani"):
         st.session_state["polozky"].append(st.session_state["nova_polozka"])
         st.success("Dlažba bola pridaná.")
