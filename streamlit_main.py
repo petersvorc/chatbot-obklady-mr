@@ -5,6 +5,8 @@ import pandas as pd
 import datetime
 import json
 import os
+import random
+import string
 
 # ------------------- Autentifikácia -------------------
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -23,6 +25,9 @@ worksheet_dopyt = sheet.worksheet("dopyt")
 if "vybrane_dlazby" not in st.session_state:
     st.session_state["vybrane_dlazby"] = []
 
+def generate_id():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
 # ------------------- Výpočet ceny -------------------
 def vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo):
     riadok = df_cennik[df_cennik["rozmer + hrúbka + povrch"] == param]
@@ -35,7 +40,7 @@ def vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo):
         doprava_riadok = df_doprava[df_doprava["polozka"].str.lower() == "doprava do 20 m²"]
         if not doprava_riadok.empty:
             doprava = float(doprava_riadok["cena"].values[0])
-            doprava_text = f"* Pre objednávky do 20 m² účtujeme dopravu: {doprava} €"
+            doprava_text = f"doprava do 20 m² | {doprava} €"
         cena = round(cena_m2 * mnozstvo + doprava)
         poznamka = None
     elif 21 <= celkove_mnozstvo <= 59:
@@ -66,36 +71,43 @@ if st.button("Pridať tento typ dlažby"):
     if cena is None:
         st.error("Nenašla sa cena pre vybraný formát.")
     else:
-        st.session_state["vybrane_dlazby"].append({
+        polozka = {
             "param": param,
             "mnozstvo": mnozstvo,
             "cena_m2": cena_m2,
             "cena": cena,
             "poznamka": poznamka,
             "doprava_text": doprava_text,
-            "sluzby": vybrane_sluzby
-        })
+            "sluzby": vybrane_sluzby,
+            "cena_sluzby": sum(df_sluzby[df_sluzby["sluzba"].isin(vybrane_sluzby)]["cena"])
+        }
+        st.session_state["vybrane_dlazby"].append(polozka)
         st.success("Dlažba bola pridaná.")
 
 # ------------------- Súhrn -------------------
 if st.session_state["vybrane_dlazby"]:
     st.subheader("Súhrn vášho výberu:")
     total = 0
+    doprava_polozka = None
     for i, p in enumerate(st.session_state["vybrane_dlazby"]):
         st.write(f"{i+1}. {p['param']} | {p['cena_m2']} €/m² | {p['mnozstvo']} m² | {p['cena']} €")
-        if p['doprava_text']:
-            st.write(p['doprava_text'])
+        total += p["cena"]
+        if p["doprava_text"]:
+            doprava_polozka = p["doprava_text"]
+        for sluzba in p['sluzby']:
+            cena_sluzby = df_sluzby[df_sluzby["sluzba"] == sluzba]["cena"].values[0]
+            st.write(f"Doplnková služba: {sluzba} | {cena_sluzby} €")
+            total += cena_sluzby
         if p['poznamka']:
             st.info(p['poznamka'])
-        if p['sluzby']:
-            st.write(f"Doplnkové služby: {', '.join(p['sluzby'])}")
-        total += p["cena"]
+    if doprava_polozka:
+        st.write(f"* {doprava_polozka}")
     st.write(f"**Orientačná cena spolu:** {total} €")
 
     if st.button("Vybrať ďalšiu dlažbu"):
         st.experimental_rerun()
 
-    st.subheader("Zadajte kontaktné údaje")
+    st.subheader("Zadajte kontaktné údaje:")
     email = st.text_input("Emailová adresa:")
     miesto = st.text_input("Miesto dodania:")
 
@@ -104,20 +116,21 @@ if st.session_state["vybrane_dlazby"]:
             st.error("Zadajte email aj miesto dodania.")
         else:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            for polozka in st.session_state["vybrane_dlazby"]:
+            id_zaujemcu = generate_id()
+            for p in st.session_state["vybrane_dlazby"]:
                 worksheet_dopyt.append_row([
                     timestamp,
-                    "",
+                    id_zaujemcu,
                     email,
                     miesto,
                     "",
                     "",
                     "",
                     "",
-                    polozka["param"],
-                    polozka["mnozstvo"],
-                    polozka["cena"],
-                    f"{polozka['param']} | {polozka['cena_m2']} €/m² | {polozka['mnozstvo']} m² | Služby: {', '.join(polozka['sluzby']) if polozka['sluzby'] else 'Žiadne'}"
+                    p["param"],
+                    p["mnozstvo"],
+                    p["cena"],
+                    f"{p['param']} | {p['cena_m2']} €/m² | {p['mnozstvo']} m² | Služby: {', '.join(p['sluzby']) if p['sluzby'] else 'Žiadne'}"
                 ])
             st.success("Dopyt bol odoslaný.")
             st.session_state["vybrane_dlazby"] = []
