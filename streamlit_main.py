@@ -29,6 +29,8 @@ df_cennik, df_doprava, df_sluzby, worksheet_dopyt = nacitaj_data()
 # ------------------- Inicializácia session state -------------------
 if "vybrane_dlazby" not in st.session_state:
     st.session_state["vybrane_dlazby"] = []
+if "clear_form" not in st.session_state:
+    st.session_state["clear_form"] = False
 
 def generate_id():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
@@ -66,9 +68,13 @@ def vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo):
 st.header("Overte si parametre našich dlažieb a orientačné ceny.")
 st.write("Na cenu majú vplyv rozmery, povrch a množstvo dlažby.")
 
-param = st.selectbox("Vyberte rozmery, hrúbku a povrch:", sorted(df_cennik["rozmer + hrúbka + povrch"].unique()))
-mnozstvo = st.number_input("Množstvo (m²):", min_value=1, step=1)
-vybrane_sluzby = st.multiselect("Vyberte doplnkové služby:", df_sluzby["sluzba"].unique())
+if st.session_state["clear_form"]:
+    st.session_state["clear_form"] = False
+    st.experimental_rerun()
+
+param = st.selectbox("Vyberte rozmery, hrúbku a povrch:", sorted(df_cennik["rozmer + hrúbka + povrch"].unique()), key="param")
+mnozstvo = st.number_input("Množstvo (m²):", min_value=1, step=1, key="mnozstvo")
+vybrane_sluzby = st.multiselect("Vyberte doplnkové služby:", df_sluzby["sluzba"].unique(), key="sluzby")
 
 if st.button("Pridať tento typ dlažby"):
     celkove_mnozstvo = sum(p["mnozstvo"] for p in st.session_state["vybrane_dlazby"]) + mnozstvo
@@ -89,6 +95,7 @@ if st.button("Pridať tento typ dlažby"):
         }
         st.session_state["vybrane_dlazby"].append(polozka)
         st.success("Dlažba bola pridaná.")
+        st.session_state["clear_form"] = True
 
 # ------------------- Súhrn -------------------
 if st.session_state["vybrane_dlazby"]:
@@ -109,6 +116,9 @@ if st.session_state["vybrane_dlazby"]:
     st.write(f"**Orientačná cena spolu:** {total} €")
 
     if st.button("Vybrať ďalšiu dlažbu"):
+        st.session_state["param"] = None
+        st.session_state["mnozstvo"] = 1
+        st.session_state["sluzby"] = []
         st.rerun()
 
     st.subheader("Zadajte kontaktné údaje:")
