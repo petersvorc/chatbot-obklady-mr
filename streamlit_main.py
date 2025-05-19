@@ -39,8 +39,8 @@ def vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo):
         cena_m2 = riadok.iloc[0]["21-59 m2"]
         doprava_riadok = df_doprava[df_doprava["polozka"].str.lower() == "doprava do 20 m²"]
         if not doprava_riadok.empty:
-            doprava = float(doprava_riadok["cena"].values[0])
-            doprava_text = f"doprava do 20 m² | {doprava} €"
+            doprava = round(float(doprava_riadok["cena"].values[0]))
+            doprava_text = f"{len(st.session_state['vybrane_dlazby']) + 1}. doprava do 20 m² | {doprava} €"
         cena = round(cena_m2 * mnozstvo + doprava)
         poznamka = None
     elif 21 <= celkove_mnozstvo <= 59:
@@ -55,7 +55,7 @@ def vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo):
         cena_m2 = riadok.iloc[0]["60-120 m2"]
         cena = round(cena_m2 * mnozstvo)
         poznamka = "Pri množstve dlažby nad 121 m2 je pravdepodobne priestor pre zľavu. Odošlite formulár alebo nás priamo kontaktujte."
-    return cena_m2, cena, poznamka, doprava_text
+    return round(cena_m2), cena, poznamka, doprava_text
 
 # ------------------- Formulár -------------------
 st.header("Overte si parametre našich dlažieb a orientačné ceny.")
@@ -79,7 +79,7 @@ if st.button("Pridať tento typ dlažby"):
             "poznamka": poznamka,
             "doprava_text": doprava_text,
             "sluzby": vybrane_sluzby,
-            "cena_sluzby": sum(df_sluzby[df_sluzby["sluzba"].isin(vybrane_sluzby)]["cena"])
+            "cena_sluzby": sum(round(df_sluzby[df_sluzby["sluzba"] == s]["cena"].values[0]) for s in vybrane_sluzby)
         }
         st.session_state["vybrane_dlazby"].append(polozka)
         st.success("Dlažba bola pridaná.")
@@ -88,20 +88,19 @@ if st.button("Pridať tento typ dlažby"):
 if st.session_state["vybrane_dlazby"]:
     st.subheader("Súhrn vášho výberu:")
     total = 0
-    doprava_polozka = None
-    for i, p in enumerate(st.session_state["vybrane_dlazby"]):
-        st.write(f"{i+1}. {p['param']} | {p['cena_m2']} €/m² | {p['mnozstvo']} m² | {p['cena']} €")
+    counter = 1
+    for p in st.session_state["vybrane_dlazby"]:
+        st.write(f"{counter}. {p['param']} | {p['cena_m2']} €/m² | {p['mnozstvo']} m² | {p['cena']} €")
         total += p["cena"]
         if p["doprava_text"]:
-            doprava_polozka = p["doprava_text"]
+            st.write(p["doprava_text"])
         for sluzba in p['sluzby']:
-            cena_sluzby = df_sluzby[df_sluzby["sluzba"] == sluzba]["cena"].values[0]
-            st.write(f"Doplnková služba: {sluzba} | {cena_sluzby} €")
+            cena_sluzby = round(df_sluzby[df_sluzby["sluzba"] == sluzba]["cena"].values[0])
+            st.write(f"{counter}. Doplnková služba: {sluzba} | {cena_sluzby} €")
             total += cena_sluzby
         if p['poznamka']:
             st.info(p['poznamka'])
-    if doprava_polozka:
-        st.write(f"* {doprava_polozka}")
+        counter += 1
     st.write(f"**Orientačná cena spolu:** {total} €")
 
     if st.button("Vybrať ďalšiu dlažbu"):
