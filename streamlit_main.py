@@ -14,12 +14,17 @@ creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 
-# ------------------- Načítanie sheetov -------------------
-sheet = client.open("ChatBot_Obklady_MR")
-df_cennik = pd.DataFrame(sheet.worksheet("cennik").get_all_records())
-df_doprava = pd.DataFrame(sheet.worksheet("doprava").get_all_records())
-df_sluzby = pd.DataFrame(sheet.worksheet("sluzby").get_all_records())
-worksheet_dopyt = sheet.worksheet("dopyt")
+# ------------------- Načítanie dát s cachovaním -------------------
+@st.cache_data(ttl=300)
+def nacitaj_data():
+    sheet = client.open("ChatBot_Obklady_MR")
+    df_cennik = pd.DataFrame(sheet.worksheet("cennik").get_all_records())
+    df_doprava = pd.DataFrame(sheet.worksheet("doprava").get_all_records())
+    df_sluzby = pd.DataFrame(sheet.worksheet("sluzby").get_all_records())
+    worksheet_dopyt = sheet.worksheet("dopyt")
+    return df_cennik, df_doprava, df_sluzby, worksheet_dopyt
+
+df_cennik, df_doprava, df_sluzby, worksheet_dopyt = nacitaj_data()
 
 # ------------------- Inicializácia session state -------------------
 if "vybrane_dlazby" not in st.session_state:
@@ -33,7 +38,6 @@ def vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo):
     riadok = df_cennik[df_cennik["rozmer + hrúbka + povrch"] == param]
     if riadok.empty:
         return None, None, None, None, None
-    doprava = 0
     doprava_text = None
     doprava_cena = 0
     if celkove_mnozstvo <= 20:
@@ -41,7 +45,7 @@ def vypocitaj_cenu(param, mnozstvo, celkove_mnozstvo):
         doprava_riadok = df_doprava[df_doprava["polozka"].str.lower() == "doprava do 20 m²"]
         if not doprava_riadok.empty:
             doprava_cena = round(float(doprava_riadok["cena"].values[0]))
-            doprava_text = f"doprava do 20 m²"
+            doprava_text = "doprava do 20 m²"
         cena = round(cena_m2 * mnozstvo)
         poznamka = None
     elif 21 <= celkove_mnozstvo <= 59:
@@ -90,20 +94,18 @@ if st.button("Pridať tento typ dlažby"):
 if st.session_state["vybrane_dlazby"]:
     st.subheader("Súhrn vášho výberu:")
     total = 0
-    counter = 1
-    for p in st.session_state["vybrane_dlazby"]:
-        st.write(f"{counter}. {p['param']} | {p['cena_m2']} €/m² | {p['mnozstvo']} m² | {p['cena']} €")
+    for i, p in enumerate(st.session_state["vybrane_dlazby"], start=1):
+        st.write(f"{i}. {p['param']} | {p['cena_m2']} €/m² | {p['mnozstvo']} m² | {p['cena']} €")
         total += p["cena"]
         if p["doprava_text"] and p["doprava_cena"]:
-            st.write(f"{counter}. {p['doprava_text']} | {p['doprava_cena']} €")
+            st.write(f"{i}. {p['doprava_text']} | {p['doprava_cena']} €")
             total += p["doprava_cena"]
         for sluzba in p['sluzby']:
             cena_sluzby = round(df_sluzby[df_sluzby["sluzba"] == sluzba]["cena"].values[0])
-            st.write(f"{counter}. Doplnková služba: {sluzba} | {cena_sluzby} €")
+            st.write(f"{i}. Doplnková služba: {sluzba} | {cena_sluzby} €")
             total += cena_sluzby
         if p['poznamka']:
             st.info(p['poznamka'])
-        counter += 1
     st.write(f"**Orientačná cena spolu:** {total} €")
 
     if st.button("Vybrať ďalšiu dlažbu"):
